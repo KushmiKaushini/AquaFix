@@ -2,9 +2,14 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.v1.incidents import router as incident_router
+from app.api.v1.auth import router as auth_router
 
 # Attempt automatic database creation on startup
 # Useful for local quickstart environments
@@ -21,16 +26,30 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Set CORS origins to allow any developmental mobile environment connectivity
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request, exc):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": f"Rate limit exceeded. Maximum {settings.RATE_LIMIT_PER_MINUTE} requests per minute"},
+    )
+
+
+# Set CORS origins to only allow the configured frontend URL
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[settings.FRONTEND_URL],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Route registration
+app.include_router(auth_router)
 app.include_router(
     incident_router,
     prefix=f"{settings.API_V1_STR}/incidents",

@@ -1,17 +1,22 @@
 import os
 import uuid
 import shutil
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from app.core.database import get_db
+from app.core.auth import verify_token
+from app.core.config import settings
 from app.models.incident import Incident
 from app.models.audit import IncidentAuditTrail
 from app.schemas.incident import IncidentResponse, IncidentStatusUpdate
 from app.services.gemini import gemini_service
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 # Define local uploads directory
 UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
@@ -19,6 +24,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/report", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
 async def report_incident(
+    request: Request,
     latitude: float = Form(..., ge=-90.0, le=90.0),
     longitude: float = Form(..., ge=-180.0, le=180.0),
     description: Optional[str] = Form(None),
@@ -149,11 +155,12 @@ def read_incidents(
 def update_incident_status(
     incident_id: uuid.UUID,
     payload: IncidentStatusUpdate,
+    token_payload: dict = Depends(verify_token),
     db: Session = Depends(get_db)
 ):
     """
     Update incident status and append tracking record to Audit Trail.
-    Access restricted via RBAC validation (mocked for initial boilerplate setup).
+    Requires valid JWT authentication token.
     """
     db_incident = db.query(Incident).filter(Incident.id == incident_id).first()
     if not db_incident:
@@ -165,9 +172,13 @@ def update_incident_status(
     old_status = db_incident.status
     db_incident.status = payload.status
     
+    # Get user ID from token
+    user_id = token_payload.get("sub")
+    
     # Log audit trail transaction
     db_audit = IncidentAuditTrail(
         incident_id=db_incident.id,
+        modified_by=uuid.UUID(user_id) if user_id else None,
         old_status=old_status,
         new_status=payload.status,
         internal_notes=payload.internal_notes or f"Status updated by Official review."
