@@ -39,25 +39,84 @@ async def report_incident(
     """
     Ingest a citizen reported incident.
     Saves image, runs Gemini Vision validation, performs PostGIS insertion.
+    
+    Constraints:
+    - File size max: 5 MB
+    - Allowed types: JPEG, PNG, WebP
     """
-    # 1. Read binary image bytes
+    # 1. Validate file extension
+    file_extension = os.path.splitext(file.filename or "")[1].lower() if file.filename else ""
+    if file_extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Unsupported file extension: {file_extension}. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+    
+    # 2. Validate MIME type
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Unsupported MIME type: {file.content_type}. Allowed: {', '.join(ALLOWED_MIME_TYPES)}"
+        )
+    
+    # 3. Read image bytes and validate size
     image_bytes = await file.read()
     
-    # 2. Call Gemini Vision API
-    gemini_result = await gemini_service.verify_and_categorize_incident(
-        image_bytes=image_bytes, 
-        mime_type=file.content_type or "image/jpeg"
-    )
+    if len(image_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Maximum size: {MAX_FILE_SIZE / (1024*1024):.1f} MB, received: {len(image_bytes) / (1024*1024):.1f} MB"
+        )
     
-    # 3. Spam filtering checks
+    if len(image_bytes) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty"
+        )
+    
+    # 4. Validate coordinates are reasonable
+    if abs(latitude) > 90 or abs(longitude) > 180:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid geographic coordinates"
+        )
+    
+    # 5. Validate description if provided
+    if description and len(description.strip()) > 1000:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Description too long (max 1000 characters)"
+        )
+    
+    # 6. Call Gemini Vision API
+    try:
+        gemini_result = await gemini_service.verify_and_categorize_incident(
+            image_bytes=image_bytes, 
+            mime_type=file.content_type or "image/jpeg"
+        )
+    except ValueError as ve:
+        # Validation error from Gemini response
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Image analysis failed: {str(ve)}"
+        )
+    except Exception as e:
+        # Gemini API or other critical errors
+        import logging
+        logging.error(f"Gemini service error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI image analysis service temporarily unavailable. Please try again later."
+        )
+    
+    # 7. Spam filtering checks
     if not gemini_result.get("is_infrastructure_issue", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Spam Filter Rejection: {gemini_result.get('reasoning', 'Not a valid sanitation/infrastructure issue.')}"
         )
 
-    # 4. Save file locally for verification
-    file_extension = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+    # 8. Save file locally for verification
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     filepath = os.path.join(UPLOAD_DIR, unique_filename)
     
@@ -69,11 +128,11 @@ async def report_incident(
     # Define local accessible asset URL
     image_url = f"/uploads/{unique_filename}"
     
-    # 5. Build spatial coordinate string for PostGIS Point mapping
+    # 9. Build spatial coordinate string for PostGIS Point mapping
     # Note: PostGIS POINT parameters take Longitude first, then Latitude
     wkt_location = f"SRID=4326;POINT({longitude} {latitude})"
     
-    # 6. Create SQL model
+    # 10. Create SQL model
     db_incident = Incident(
         status="Pending",
         category=gemini_result.get("category", "Public Sanitation Issue"),
@@ -86,7 +145,7 @@ async def report_incident(
     db.commit()
     db.refresh(db_incident)
     
-    # 7. Add initial audit trail log
+    # 11. Add initial audit trail log
     db_audit = IncidentAuditTrail(
         incident_id=db_incident.id,
         new_status="Pending",
@@ -95,7 +154,7 @@ async def report_incident(
     db.add(db_audit)
     db.commit()
     
-    # 8. Transform db representation to coordinate outputs for Pydantic mapping
+    # 12. Transform db representation to coordinate outputs for Pydantic mapping
     return IncidentResponse(
         id=db_incident.id,
         status=db_incident.status,
@@ -108,37 +167,80 @@ async def report_incident(
         updated_at=db_incident.updated_at
     )
 
-@router.get("/", response_model=List[IncidentResponse])
+@router.get("/", response_model=dict)  # Using dict to include pagination
 def read_incidents(
     status_filter: Optional[str] = None,
     lat: Optional[float] = None,
     lon: Optional[float] = None,
     radius: Optional[float] = None,  # in meters
+    skip: int = 0,
+    limit: int = 20,
     db: Session = Depends(get_db)
 ):
     """
-    Get incidents, with optional support for status filtering and geocentric radial distance queries (PostGIS).
+    Get incidents with pagination and optional filters.
+    
+    Query Parameters:
+    - skip: Number of records to skip (default: 0)
+    - limit: Maximum records to return (default: 20, max: 100)
+    - status_filter: Filter by status (Pending, In Progress, Resolved, Rejected)
+    - lat, lon, radius: Geographic radius filter (all three required)
+    
+    Returns: {items: [...], total: int, skip: int, limit: int, page: int, total_pages: int}
     """
+    from app.schemas.incident import PaginatedIncidentResponse
+    
+    # Validate pagination parameters
+    skip = max(0, skip)
+    limit = max(1, min(100, limit))  # Clamp between 1-100
+    
     query = db.query(Incident)
     
+    # Apply status filter if provided
     if status_filter:
+        from app.schemas.incident import VALID_STATUSES
+        if status_filter not in VALID_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Must be one of: {', '.join(VALID_STATUSES)}"
+            )
         query = query.filter(Incident.status == status_filter)
-        
+    
     # Implement PostGIS radial query if lat, lon, and radius are supplied
     if lat is not None and lon is not None and radius is not None:
+        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid geographic coordinates"
+            )
+        if radius <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Radius must be greater than 0"
+            )
+        
         point = f"SRID=4326;POINT({lon} {lat})"
         # ST_DWithin handles spatial geography distance checking
         query = query.filter(func.ST_DWithin(Incident.location, point, radius))
-        
-    incidents = query.all()
+    
+    # Get total count before pagination
+    total_count = query.count()
+    
+    # Apply pagination
+    incidents = query.order_by(Incident.created_at.desc()).offset(skip).limit(limit).all()
     
     # Convert PostGIS POINT shape to raw latitude/longitude floats for response serialization
     results = []
     for inc in incidents:
-        # Resolve the geography field coordinates via SQLAlchemy ST_AsText helper or raw SQL projection
-        # For lightweight standard parsing, we can fetch lon/lat directly from PostGIS features
-        lon_coord = db.scalar(func.ST_X(inc.location.cast(func.geometry)))
-        lat_coord = db.scalar(func.ST_Y(inc.location.cast(func.geometry)))
+        # Resolve the geography field coordinates via SQLAlchemy ST_X/ST_Y
+        try:
+            lon_coord = db.scalar(func.ST_X(inc.location.cast(func.geometry)))
+            lat_coord = db.scalar(func.ST_Y(inc.location.cast(func.geometry)))
+        except Exception as e:
+            # Fallback if coordinate extraction fails
+            import logging
+            logging.warning(f"Failed to extract coordinates for incident {inc.id}: {str(e)}")
+            continue
         
         results.append(
             IncidentResponse(
@@ -153,8 +255,16 @@ def read_incidents(
                 updated_at=inc.updated_at
             )
         )
-        
-    return results
+    
+    # Return paginated response
+    return {
+        "items": results,
+        "total": total_count,
+        "skip": skip,
+        "limit": limit,
+        "page": (skip // limit) + 1 if limit > 0 else 1,
+        "total_pages": (total_count + limit - 1) // limit if limit > 0 else 1
+    }
 
 @router.patch("/{incident_id}/status", response_model=IncidentResponse)
 def update_incident_status(
@@ -225,9 +335,17 @@ def update_incident_status(
     db.commit()
     db.refresh(db_incident)
     
-    # Coordinate extraction
-    lon_coord = db.scalar(func.ST_X(db_incident.location.cast(func.geometry)))
-    lat_coord = db.scalar(func.ST_Y(db_incident.location.cast(func.geometry)))
+    # Coordinate extraction with error handling
+    try:
+        lon_coord = db.scalar(func.ST_X(db_incident.location.cast(func.geometry)))
+        lat_coord = db.scalar(func.ST_Y(db_incident.location.cast(func.geometry)))
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to extract coordinates for incident {db_incident.id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to extract incident location coordinates"
+        )
     
     return IncidentResponse(
         id=db_incident.id,

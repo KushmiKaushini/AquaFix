@@ -69,39 +69,72 @@ class GeminiVisionService:
                 "data": image_bytes
             }
 
-            # Generate content from model
-            response = self.model.generate_content([prompt, image_part])
+            # Generate content from model with timeout and config
+            response = self.model.generate_content(
+                [prompt, image_part],
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.2,
+                    top_p=0.95,
+                    max_output_tokens=500
+                )
+            )
+            
+            if not response or not response.text:
+                logger.error("Gemini returned empty response")
+                raise ValueError("Empty response from Gemini API")
             
             text_response = response.text.strip()
+            
             # Handle markdown fence code wrapper formatting if returned by LLM
             if text_response.startswith("```json"):
                 text_response = text_response.split("```json")[1].split("```")[0].strip()
             elif text_response.startswith("```"):
                 text_response = text_response.split("```")[1].split("```")[0].strip()
 
+            # Parse and validate response structure
             result = json.loads(text_response)
-            logger.info(f"🤖 Gemini Analysis Result: {result}")
+            
+            # Validate required fields exist
+            required_fields = {"is_infrastructure_issue", "category", "confidence", "reasoning"}
+            missing_fields = required_fields - set(result.keys())
+            if missing_fields:
+                logger.error(f"Gemini response missing required fields: {missing_fields}")
+                raise ValueError(f"Invalid response structure: missing {missing_fields}")
+            
+            # Validate field types
+            if not isinstance(result["is_infrastructure_issue"], bool):
+                logger.error(f"Invalid is_infrastructure_issue type: {type(result['is_infrastructure_issue'])}")
+                raise ValueError("is_infrastructure_issue must be boolean")
+            
+            if not isinstance(result["confidence"], (int, float)) or not (0 <= result["confidence"] <= 1):
+                logger.error(f"Invalid confidence value: {result['confidence']}")
+                raise ValueError("confidence must be a number between 0 and 1")
+            
+            # Validate category if it's an infrastructure issue
+            if result["is_infrastructure_issue"]:
+                valid_categories = {
+                    "Pipeline Leak", "Drainage Blockage", "Overflowing Sewage",
+                    "Road Sinkhole", "Public Sanitation Issue"
+                }
+                if result["category"] not in valid_categories:
+                    logger.warning(f"Gemini returned unexpected category: {result['category']}, defaulting to 'Public Sanitation Issue'")
+                    result["category"] = "Public Sanitation Issue"
+            
+            logger.info(f"✅ Gemini Analysis Success: is_infrastructure={result['is_infrastructure_issue']}, category={result['category']}, confidence={result['confidence']}")
             return result
 
         except json.JSONDecodeError as je:
-            logger.error(f"Error parsing Gemini response as JSON: {response.text}. Error: {je}")
-            # Safe fallback default categorization
-            return {
-                "is_infrastructure_issue": True,
-                "category": "Public Sanitation Issue",
-                "confidence": 0.50,
-                "reasoning": "Gemini response fell back to manual default due to serialization issues."
-            }
+            logger.error(f"❌ Gemini response JSON parsing failed: {str(je)}")
+            logger.debug(f"Raw response: {text_response[:200] if text_response else 'None'}")
+            raise ValueError(f"Gemini returned invalid JSON: {str(je)}")
+        
+        except ValueError as ve:
+            logger.error(f"❌ Gemini response validation failed: {str(ve)}")
+            raise
+        
         except Exception as e:
-            logger.error(f"Gemini API failure: {str(e)}")
-            # Fall back to simulated verification so that the system degrades gracefully
-            logger.warning("Failing back gracefully to Simulated Verification due to API exceptions.")
-            return {
-                "is_infrastructure_issue": True,
-                "category": "Pipeline Leak",
-                "confidence": 0.85,
-                "reasoning": "Automated fallback activated. Standard verification successful."
-            }
+            logger.error(f"❌ Gemini API critical failure: {type(e).__name__}: {str(e)}", exc_info=True)
+            raise
 
 # Instantiate singleton service instance
 gemini_service = GeminiVisionService()
