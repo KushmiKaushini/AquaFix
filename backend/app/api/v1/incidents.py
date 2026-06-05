@@ -22,6 +22,11 @@ limiter = Limiter(key_func=get_remote_address)
 UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# File upload constraints
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
 @router.post("/report", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
 async def report_incident(
     request: Request,
@@ -160,28 +165,61 @@ def update_incident_status(
 ):
     """
     Update incident status and append tracking record to Audit Trail.
-    Requires valid JWT authentication token.
+    REQUIRES: Valid JWT token AND 'official' role.
     """
+    # 1. Extract user ID from token
+    user_id_str = token_payload.get("sub")
+    if not user_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token - missing user ID"
+        )
+    
+    user_id = uuid.UUID(user_id_str)
+    
+    # 2. Verify user exists and has 'official' role
+    from app.models.user import User
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+    
+    if user.role != "official":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Only officials can update incident status. Your role: {user.role}"
+        )
+    
+    # 3. Verify incident exists
     db_incident = db.query(Incident).filter(Incident.id == incident_id).first()
     if not db_incident:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Requested Incident ID not found."
         )
+    
+    # 4. Validate status is one of allowed values
+    ALLOWED_STATUSES = {"Pending", "In Progress", "Resolved", "Rejected"}
+    if payload.status not in ALLOWED_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status. Must be one of: {', '.join(ALLOWED_STATUSES)}"
+        )
         
+    # 5. Update incident status
     old_status = db_incident.status
     db_incident.status = payload.status
     
-    # Get user ID from token
-    user_id = token_payload.get("sub")
-    
-    # Log audit trail transaction
+    # 6. Log audit trail transaction
     db_audit = IncidentAuditTrail(
         incident_id=db_incident.id,
-        modified_by=uuid.UUID(user_id) if user_id else None,
+        modified_by=user_id,
         old_status=old_status,
         new_status=payload.status,
-        internal_notes=payload.internal_notes or f"Status updated by Official review."
+        internal_notes=payload.internal_notes or f"Status updated by official: {user.full_name}"
     )
     db.add(db_audit)
     db.commit()
