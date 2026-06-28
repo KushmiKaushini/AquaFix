@@ -57,10 +57,26 @@ async def rate_limit_handler(request, exc):
     )
 
 
-# Set CORS origins to only allow the configured frontend URL
+# Set CORS origins — allow configured URL plus common Flutter dev ports
+_cors_origins = [settings.FRONTEND_URL]
+if settings.ENVIRONMENT == "development":
+    # Flutter dev server runs on various ports (web, desktop)
+    _dev_origins = [
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://localhost:5000",
+        "http://localhost:5555",
+        "http://10.0.2.2:3000",   # Android emulator host loopback
+        "http://10.0.2.2:8080",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8080",
+    ]
+    # Merge without duplicates
+    _cors_origins = list(dict.fromkeys(_cors_origins + _dev_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],

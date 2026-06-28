@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from app.core.database import get_db
-from app.core.auth import hash_password, verify_password, create_access_token
+from app.core.auth import hash_password, verify_password, create_access_token, verify_token
 from app.models.user import User
 from app.schemas.user import UserCreate, UserLogin, UserResponse, TokenResponse
 
@@ -13,8 +13,9 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user."""
+@limiter.limit("5/minute")
+def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
+    """Register a new user. Rate limited to 5 per minute per IP."""
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -39,8 +40,9 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("10/minute")
 def login(request: Request, credentials: UserLogin, db: Session = Depends(get_db)):
-    """Login with email and password. Rate limited to prevent brute force attacks."""
+    """Login with email and password. Rate limited to 10 per minute per IP."""
     # Find user by email
     user = db.query(User).filter(User.email == credentials.email).first()
     if not user:
