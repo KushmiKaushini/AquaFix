@@ -1,0 +1,69 @@
+# ===== BUILD ARTIFACTS =====
+build/
+*.apk
+*.ipa
+*.app
+DerivedData/
+Pods/
+Expo/
+
+# ===== DEPENDENCIES =====
+node_modules/
+.dart_tool/
+.pub-cache/
+vendor/
+packages/
+flutter_export_environment.sh
+
+# ===== IDE FILES =====
+.idea/
+*.iml
+*.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xccheckout
+*.moved-aside
+
+# ===== OS FILES =====
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ===== SECRETS =====
+.env
+.env.local
+*.keystore
+*.jks
+*.pem
+*.p12
+google-services.json
+GoogleService-Info.plist
+firebase-credentials.json
+
+# ===== GENERATED FILES =====
+*.generated.dart
+*.g.dart
+*.freezed.dart
+*.gr.dart
+*.gen.dart
+lib/generated/
+generated/
+
+# ===== COVERAGE & LOGS =====
+coverage/
+*.lcov
+*.log
+logs/
+
+# ===== TEMPORARY =====
+*.tmp
+*.swp
+*.bak
+*~
+
+# ===== UPLOADS =====
+backend/uploads/

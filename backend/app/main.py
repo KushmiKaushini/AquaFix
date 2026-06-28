@@ -75,7 +75,6 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.include_router(auth_router, tags=["Authentication"])
 app.include_router(incident_router, prefix="/api/v1/incidents", tags=["Incidents"])
 
-
 # Health check endpoint
 @app.get("/health", tags=["Health"])
 async def health_check():
@@ -95,25 +94,4 @@ async def root():
         "version": "1.0.0",
         "docs": "/docs",
         "openapi": "/openapi.json"
-    }
-
-# Route registration
-app.include_router(auth_router)
-app.include_router(
-    incident_router,
-    prefix=f"{settings.API_V1_STR}/incidents",
-    tags=["Incidents"]
-)
-
-# Statically serve images uploaded by citizens
-UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-
-@app.get("/")
-def read_root():
-    return {
-        "status": "online",
-        "service": settings.PROJECT_NAME,
-        "message": "Welcome to AquaFix API Portal. Access Swagger docs at /docs."
     }

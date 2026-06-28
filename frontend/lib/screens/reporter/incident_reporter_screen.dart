@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../providers/location_provider.dart';
-import '../../services/api_service.dart';
+import '../../providers/app_providers.dart';
 import '../../services/api_exceptions.dart';
 
 class IncidentReporterScreen extends ConsumerStatefulWidget {
@@ -121,6 +121,7 @@ class _IncidentReporterScreenState
       final double lat = locationState.position!.latitude;
       final double lon = locationState.position!.longitude;
 
+      final apiService = ref.read(apiServiceProvider);
       final result = await apiService.submitIncident(
         imagePath: _selectedImage!.path,
         latitude: lat,

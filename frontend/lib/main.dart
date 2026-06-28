@@ -5,7 +5,6 @@ import 'app.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
-    // ProviderScope is mandatory for Riverpod state access
     const ProviderScope(
       child: AquaFixApp(),
     ),
