@@ -1,5 +1,5 @@
 name: aquafix
-description: "AquaFix crowdsourced public sanitation and infrastructure reporting mobile application."
+description: "AquaFix - Crowdsourced public sanitation and infrastructure reporting mobile application."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -11,23 +11,23 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.2
-  
+
   # State Management
   flutter_riverpod: ^2.3.6
-  
+
   # Geolocation & GPS capture
   geolocator: ^10.1.0
-  
+
   # Image utilities & camera
   image_picker: ^1.0.4
-  
-  # Network HTTP Client (Axios equivalent)
+
+  # Network HTTP Client
   http: ^1.1.0
   http_parser: ^4.0.2
-  
+
   # Encrypted Local Storage
   flutter_secure_storage: ^8.0.0
-  
+
   # Styling & Typography
   google_fonts: ^6.1.0
 
