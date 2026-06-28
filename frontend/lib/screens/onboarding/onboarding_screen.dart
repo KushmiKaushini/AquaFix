@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../widgets/ui_components.dart';
+import '../auth/login_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  final VoidCallback onComplete;
-  const OnboardingScreen({super.key, required this.onComplete});
+  const OnboardingScreen({super.key});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -50,8 +50,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_currentPage < _slides.length - 1) {
       _controller.nextPage(duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
     } else {
-      widget.onComplete();
+      _navigateToLogin();
     }
+  }
+
+  void _navigateToLogin() {
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => const LoginScreen(),
+        transitionsBuilder: (_, animation, __, child) => FadeTransition(
+          opacity: animation,
+          child: child,
+        ),
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
   }
 
   @override
@@ -67,7 +80,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: TextButton(
-                  onPressed: widget.onComplete,
+                  onPressed: _navigateToLogin,
                   child: Text('Skip', style: TextStyle(color: theme.colorScheme.primary)),
                 ),
               ),

@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/app_providers.dart';
 import '../onboarding/onboarding_screen.dart';
-import '../auth/login_screen.dart';
 import '../home/home_screen.dart';
-import '../../widgets/ui_components.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -68,9 +66,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void _navigateToOnboarding() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => OnboardingScreen(
-          onComplete: () => _navigateTo(LoginScreen()),
-        ),
+        pageBuilder: (_, __, ___) => const OnboardingScreen(),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
           opacity: animation,
           child: child,
@@ -80,10 +76,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  void _navigateTo(Widget screen) {
+  void _navigateToHome() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => screen,
+        pageBuilder: (_, __, ___) => const HomeScreen(),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
           opacity: animation,
           child: child,
@@ -91,10 +87,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         transitionDuration: const Duration(milliseconds: 400),
       ),
     );
-  }
-
-  void _navigateToHome() {
-    _navigateTo(const HomeScreen());
   }
 
   @override
