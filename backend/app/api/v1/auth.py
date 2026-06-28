@@ -60,3 +60,27 @@ def login(request: Request, credentials: UserLogin, db: Session = Depends(get_db
     access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
 
     return TokenResponse(access_token=access_token)
+
+
+@router.get("/me", response_model=UserResponse)
+def get_current_user(
+    token_payload: dict = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    """Get the currently authenticated user's profile."""
+    user_id_str = token_payload.get("sub")
+    if not user_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token - missing user ID"
+        )
+
+    from uuid import UUID
+    user = db.query(User).filter(User.id == UUID(user_id_str)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return user

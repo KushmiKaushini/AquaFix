@@ -266,6 +266,48 @@ def read_incidents(
         "total_pages": (total_count + limit - 1) // limit if limit > 0 else 1
     }
 
+@router.get("/{incident_id}", response_model=IncidentResponse)
+def read_incident(
+    incident_id: uuid.UUID,
+    token_payload: dict = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    """
+    Get a single incident by ID.
+    REQUIRES: Valid JWT token.
+    """
+    db_incident = db.query(Incident).filter(Incident.id == incident_id).first()
+    if not db_incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Incident not found"
+        )
+
+    # Extract coordinates
+    try:
+        lon_coord = db.scalar(func.ST_X(db_incident.location.cast(func.geometry)))
+        lat_coord = db.scalar(func.ST_Y(db_incident.location.cast(func.geometry)))
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to extract coordinates for incident {db_incident.id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to extract incident location coordinates"
+        )
+
+    return IncidentResponse(
+        id=db_incident.id,
+        status=db_incident.status,
+        category=db_incident.category,
+        description=db_incident.description,
+        image_url=db_incident.image_url,
+        latitude=lat_coord,
+        longitude=lon_coord,
+        created_at=db_incident.created_at,
+        updated_at=db_incident.updated_at
+    )
+
+
 @router.patch("/{incident_id}/status", response_model=IncidentResponse)
 def update_incident_status(
     incident_id: uuid.UUID,
