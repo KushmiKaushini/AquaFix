@@ -68,4 +68,3 @@ class PaginatedIncidentResponse(BaseModel):
     def total_pages(self) -> int:
         """Calculate total number of pages."""
         return (self.total + self.limit - 1) // self.limit if self.limit > 0 else 1
-    }

@@ -57,7 +57,12 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def assemble_db_connection(cls, v: str) -> str:
-        """Convert old postgres:// URLs to postgresql:***@field_validator("FRONTEND_URL")
+        """Convert old postgres:// URLs to postgresql:// format."""
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql://", 1)
+        return v
+
+    @field_validator("FRONTEND_URL")
     @classmethod
     def validate_frontend_url(cls, v: str) -> str:
         """Ensure FRONTEND_URL is a valid URL."""
