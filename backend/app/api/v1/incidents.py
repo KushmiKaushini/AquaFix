@@ -225,23 +225,27 @@ def read_incidents(
     
     # Get total count before pagination
     total_count = query.count()
-    
-    # Apply pagination
-    incidents = query.order_by(Incident.created_at.desc()).offset(skip).limit(limit).all()
-    
-    # Convert PostGIS POINT shape to raw latitude/longitude floats for response serialization
+
+    # Apply pagination — single query with coordinate extraction in SELECT
+    # Fixes N+1: instead of calling db.scalar(ST_X/ST_Y) per row, we extract
+    # coordinates directly in the SQL query using func.ST_X/func.ST_Y
+    # Geography type must be cast to geometry before ST_X/ST_Y
+    incidents_with_coords = (
+        db.query(
+            Incident,
+            func.ST_X(Incident.location.cast(func.geometry)).label("longitude"),
+            func.ST_Y(Incident.location.cast(func.geometry)).label("latitude")
+        )
+        .order_by(Incident.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    # Build response from query results
     results = []
-    for inc in incidents:
-        # Resolve the geography field coordinates via SQLAlchemy ST_X/ST_Y
-        try:
-            lon_coord = db.scalar(func.ST_X(inc.location.cast(func.geometry)))
-            lat_coord = db.scalar(func.ST_Y(inc.location.cast(func.geometry)))
-        except Exception as e:
-            # Fallback if coordinate extraction fails
-            import logging
-            logging.warning(f"Failed to extract coordinates for incident {inc.id}: {str(e)}")
-            continue
-        
+    for row in incidents_with_coords:
+        inc = row.Incident
         results.append(
             IncidentResponse(
                 id=inc.id,
@@ -249,13 +253,13 @@ def read_incidents(
                 category=inc.category,
                 description=inc.description,
                 image_url=inc.image_url,
-                latitude=lat_coord,
-                longitude=lon_coord,
+                latitude=row.latitude,
+                longitude=row.longitude,
                 created_at=inc.created_at,
                 updated_at=inc.updated_at
             )
         )
-    
+
     # Return paginated response
     return {
         "items": results,
