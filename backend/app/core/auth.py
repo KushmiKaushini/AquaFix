@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi.security import HTTPBearer
 from passlib.context import CryptContext
 from app.core.config import settings
 
@@ -42,7 +42,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def verify_token(credentials: HTTPAuthCredentials = Depends(security)) -> dict:
+def verify_token(credentials=Depends(security)) -> dict:
     """Verify a JWT token and return its payload."""
     token = credentials.credentials
     try:

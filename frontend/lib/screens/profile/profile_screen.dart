@@ -76,14 +76,14 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 32),
 
-            // Stats cards
+            // Stats cards (placeholder until stats API is available)
             Row(
               children: [
                 Expanded(
                   child: _buildStatCard(
                     theme,
                     'Reports',
-                    '12',
+                    '—',
                     Icons.flag,
                   ),
                 ),
@@ -92,7 +92,7 @@ class ProfileScreen extends ConsumerWidget {
                   child: _buildStatCard(
                     theme,
                     'Resolved',
-                    '8',
+                    '—',
                     Icons.check_circle,
                   ),
                 ),
@@ -105,7 +105,7 @@ class ProfileScreen extends ConsumerWidget {
                   child: _buildStatCard(
                     theme,
                     'In Progress',
-                    '3',
+                    '—',
                     Icons.schedule,
                   ),
                 ),
@@ -114,7 +114,7 @@ class ProfileScreen extends ConsumerWidget {
                   child: _buildStatCard(
                     theme,
                     'Impact',
-                    '+147',
+                    '—',
                     Icons.trending_up,
                   ),
                 ),
