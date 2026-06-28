@@ -57,12 +57,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def assemble_db_connection(cls, v: str) -> str:
-        """Convert old postgres:// URLs to postgresql://."""
-        if v.startswith("postgres://"):
-            return v.replace("postgres://", "postgresql://", 1)
-        return v
-    
-    @field_validator("FRONTEND_URL")
+        """Convert old postgres:// URLs to postgresql:***@field_validator("FRONTEND_URL")
     @classmethod
     def validate_frontend_url(cls, v: str) -> str:
         """Ensure FRONTEND_URL is a valid URL."""
@@ -73,13 +68,12 @@ class Settings(BaseSettings):
 # Instantiate settings with validation
 try:
     settings = Settings()
-    print(f"✅ Configuration loaded successfully (Environment: {settings.ENVIRONMENT})")
+    print(f"Configuration loaded successfully (Environment: {settings.ENVIRONMENT})")
 except ValidationError as e:
-    print("❌ Configuration validation failed:")
+    print("Configuration validation failed:")
     for error in e.errors():
         field = error["loc"][0] if error["loc"] else "unknown"
         msg = error["msg"]
         print(f"  - {field}: {msg}")
-    print("\n⚠️ Please set the missing environment variables in your .env file.")
+    print("\nPlease set the missing environment variables in your .env file.")
     sys.exit(1)
-
