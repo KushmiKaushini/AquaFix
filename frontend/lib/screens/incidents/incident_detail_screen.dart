@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../models/incident_model.dart';
 import '../../widgets/status_update_dialog.dart';
 
@@ -168,6 +170,41 @@ class IncidentDetailScreen extends ConsumerWidget {
                   style: theme.textTheme.bodyLarge,
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+
+            // Map
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: SizedBox(
+                height: 200,
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: LatLng(incident.latitude, incident.longitude),
+                    initialZoom: 15.0,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.example.aquafix',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(incident.latitude, incident.longitude),
+                          width: 40,
+                          height: 40,
+                          child: const Icon(
+                            Icons.location_on,
+                            color: Colors.red,
+                            size: 40,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 16),
 

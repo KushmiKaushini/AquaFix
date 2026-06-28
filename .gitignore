@@ -12,6 +12,7 @@ node_modules/
 .dart_tool/
 .pub-cache/
 vendor/
+__pycache__/
 packages/
 flutter_export_environment.sh
 

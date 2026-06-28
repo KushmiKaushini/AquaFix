@@ -10,12 +10,19 @@ class ProfileScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final authState = ref.watch(authStateProvider);
 
-    // Mock user data - in real app this would come from API
-    final user = authState.user ?? {
-      'email': 'citizen@aquafix.com',
-      'full_name': 'Citizen User',
-      'role': 'citizen',
-    };
+    // Use real user data from auth state (populated by /auth/me after login)
+    final user = authState.user;
+
+    if (user == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Profile')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final fullName = user['full_name'] ?? 'User';
+    final email = user['email'] ?? '';
+    final role = user['role'] ?? 'citizen';
 
     return Scaffold(
       appBar: AppBar(
@@ -30,7 +37,7 @@ class ProfileScreen extends ConsumerWidget {
               radius: 50,
               backgroundColor: theme.colorScheme.primary,
               child: Text(
-                (user['full_name'] ?? 'U')[0].toUpperCase(),
+                fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
                 style: const TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
@@ -40,14 +47,14 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              user['full_name'] ?? 'User',
+              fullName,
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              user['email'] ?? '',
+              email,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: Colors.white.withValues(alpha: 0.6),
               ),
@@ -60,7 +67,7 @@ class ProfileScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                (user['role'] ?? 'citizen').toString().toUpperCase(),
+                role.toString().toUpperCase(),
                 style: TextStyle(
                   color: theme.colorScheme.primary,
                   fontWeight: FontWeight.w600,
