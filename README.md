@@ -338,6 +338,19 @@ AquaFix includes comprehensive unit, integration, and security test suites acros
 
 ---
 
+## Project Documentation & Reports
+
+Detailed technical documentation and audit reports are available in the [`docs/`](docs/) directory:
+
+- [Architecture Verification Report](docs/ARCHITECTURE_VERIFICATION_REPORT.md): Audit and verification that endpoints, PostGIS spatial queries, and environment configs match production code.
+- [Incident Lifecycle Report](docs/INCIDENT_LIFECYCLE_REPORT.md): Complete domain analysis of status transitions, severity priorities, GPS mapping, and resolution audit trails.
+- [Responsible AI Report](docs/RESPONSIBLE_AI_REPORT.md): Google Gemini 1.5 Flash Vision integration, explainable visual markers, human-in-the-loop overrides, and fail-safe resilience.
+- [Test Suite & Security Audit](docs/TEST_AND_SECURITY_REPORT.md): Detailed results of the 49 passing automated tests, threat modeling, and defense-in-depth mitigations.
+- [System Design Specification](docs/design/system_design.md): Architecture diagrams, component interaction sequences, and technology trade-offs.
+- [Security Architecture](docs/security/security_architecture.md): Threat model analysis, RBAC permissions matrix, and encryption standards.
+
+---
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
