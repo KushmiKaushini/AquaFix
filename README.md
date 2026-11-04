@@ -342,6 +342,7 @@ AquaFix includes comprehensive unit, integration, and security test suites acros
 
 Detailed technical documentation and audit reports are available in the [`docs/`](docs/) directory:
 
+- [Fixing & Production Hardening Plan](docs/FIXING_PLAN.md): Detailed gap analysis, phased roadmap, and technical specifications for production cloud readiness.
 - [Architecture Verification Report](docs/ARCHITECTURE_VERIFICATION_REPORT.md): Audit and verification that endpoints, PostGIS spatial queries, and environment configs match production code.
 - [Incident Lifecycle Report](docs/INCIDENT_LIFECYCLE_REPORT.md): Complete domain analysis of status transitions, severity priorities, GPS mapping, and resolution audit trails.
 - [Responsible AI Report](docs/RESPONSIBLE_AI_REPORT.md): Google Gemini 1.5 Flash Vision integration, explainable visual markers, human-in-the-loop overrides, and fail-safe resilience.
