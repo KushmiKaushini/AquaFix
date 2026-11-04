@@ -147,7 +147,7 @@ class FadeSlideIn extends StatelessWidget {
           child: child,
         ),
       ),
-      child: this.child,
+      child: child,
     );
   }
 }

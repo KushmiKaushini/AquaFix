@@ -33,7 +33,7 @@ class AquaFixApp extends StatelessWidget {
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: base,
-      colorScheme: ColorScheme.dark(
+      colorScheme: const ColorScheme.dark(
         primary: primary,
         secondary: secondary,
         tertiary: tertiary,
@@ -135,7 +135,7 @@ class AquaFixApp extends StatelessWidget {
         elevation: 0,
         indicatorColor: primary.withValues(alpha: 0.18),
         labelTextStyle: WidgetStateProperty.all(const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        iconTheme: WidgetStateProperty.all(IconThemeData(color: primary)),
+        iconTheme: WidgetStateProperty.all(const IconThemeData(color: primary)),
       ),
 
       appBarTheme: const AppBarTheme(

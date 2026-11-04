@@ -164,7 +164,7 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'AI Suggestion applied: ${_selectedCategory} (${_selectedSeverity} priority)',
+                    'AI Suggestion applied: $_selectedCategory ($_selectedSeverity priority)',
                   ),
                 ),
               ],

@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import '../lib/models/incident_model.dart';
-import '../lib/models/user_model.dart';
-import '../lib/utils/validators.dart';
+import 'package:aquafix/models/incident_model.dart';
+import 'package:aquafix/models/user_model.dart';
+import 'package:aquafix/utils/validators.dart';
 
 void main() {
   group('IncidentModel', () {
