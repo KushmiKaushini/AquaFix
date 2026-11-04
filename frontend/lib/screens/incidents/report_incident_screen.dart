@@ -23,8 +23,29 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
   Position? _currentPosition;
   bool _isSubmitting = false;
   bool _isFetchingLocation = false;
+  bool _isAnalyzingAi = false;
+  bool _skipAi = false;
   String? _locationError;
   Map<String, dynamic>? _submissionResult;
+  Map<String, dynamic>? _aiSuggestion;
+
+  String _selectedCategory = 'Public Sanitation Issue';
+  String _selectedSeverity = 'Medium';
+
+  final List<String> _categories = [
+    'Pipeline Leak',
+    'Drainage Blockage',
+    'Overflowing Sewage',
+    'Road Sinkhole',
+    'Public Sanitation Issue',
+  ];
+
+  final List<String> _severities = [
+    'Low',
+    'Medium',
+    'High',
+    'Critical',
+  ];
 
   @override
   void dispose() {
@@ -43,6 +64,7 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
         setState(() {
           _selectedImage = image;
           _submissionResult = null;
+          _aiSuggestion = null;
         });
       }
     } catch (e) {
@@ -103,6 +125,61 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
     }
   }
 
+  Future<void> _analyzeWithAi() async {
+    if (_selectedImage == null) {
+      _showErrorSnackBar('Please select an incident photo first');
+      return;
+    }
+
+    setState(() {
+      _isAnalyzingAi = true;
+    });
+
+    try {
+      final apiService = ref.read(apiServiceProvider);
+      final suggestion = await apiService.analyzeImage(_selectedImage!.path);
+
+      setState(() {
+        _aiSuggestion = suggestion;
+        _isAnalyzingAi = false;
+        // Pre-fill suggested category and severity if valid
+        if (suggestion['category'] != null &&
+            _categories.contains(suggestion['category'])) {
+          _selectedCategory = suggestion['category'];
+        }
+        if (suggestion['severity'] != null &&
+            _severities.contains(suggestion['severity'])) {
+          _selectedSeverity = suggestion['severity'];
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.auto_awesome, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'AI Suggestion applied: ${_selectedCategory} (${_selectedSeverity} priority)',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF3B82F6),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isAnalyzingAi = false;
+      });
+      _showErrorSnackBar('AI suggestion unavailable. You can set category and severity manually.');
+    }
+  }
+
   Future<void> _submitReport() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -128,6 +205,9 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
         latitude: _currentPosition!.latitude,
         longitude: _currentPosition!.longitude,
         description: _descriptionController.text.trim(),
+        category: _selectedCategory,
+        severity: _selectedSeverity,
+        skipAi: _skipAi,
       );
 
       setState(() {
@@ -248,6 +328,21 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
     );
   }
 
+  Color _getSeverityColor(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+        return const Color(0xFFDC2626);
+      case 'high':
+        return const Color(0xFFEA580C);
+      case 'medium':
+        return const Color(0xFFF59E0B);
+      case 'low':
+        return const Color(0xFF10B981);
+      default:
+        return const Color(0xFF3B82F6);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -272,18 +367,18 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Report infrastructure and sanitation issues with photos and location data',
+                'Report infrastructure & sanitation issues with photos, GPS, and responsible AI suggestions.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.6),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // Image picker
               GestureDetector(
                 onTap: _isSubmitting ? null : _showImagePickerOptions,
                 child: Container(
-                  height: 220,
+                  height: 200,
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
@@ -335,7 +430,7 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
                                   vertical: 6,
                                 ),
                                 child: const Text(
-                                  'Tap to change',
+                                  'Tap to change photo',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
@@ -350,12 +445,12 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
                           children: [
                             Icon(
                               Icons.camera_enhance_outlined,
-                              size: 56,
+                              size: 52,
                               color: theme.colorScheme.primary,
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
                             const Text(
-                              'Capture or Upload Photo',
+                              'Capture or Upload Incident Photo',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 16,
@@ -363,7 +458,7 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Tap to select • JPEG, PNG, WebP (max 5MB)',
+                              'JPEG, PNG, WebP (max 5MB)',
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.5),
                                 fontSize: 12,
@@ -373,7 +468,262 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
                         ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+
+              // AI Assistance Section
+              if (_selectedImage != null && !_skipAi) ...[
+                Card(
+                  color: const Color(0xFF1E293B),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: const Color(0xFF38BDF8).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.auto_awesome,
+                                  color: Color(0xFF38BDF8),
+                                  size: 20,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'AI Assistance (Advisory)',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    color: Color(0xFF38BDF8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_isAnalyzingAi)
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF38BDF8),
+                                ),
+                              )
+                            else
+                              OutlinedButton.icon(
+                                onPressed: _analyzeWithAi,
+                                icon: const Icon(Icons.refresh, size: 14),
+                                label: Text(
+                                  _aiSuggestion == null
+                                      ? 'Analyze Photo'
+                                      : 'Re-analyze',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (_aiSuggestion != null) ...[
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF38BDF8).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Confidence: ${((_aiSuggestion!['confidence'] ?? 0.8) * 100).toInt()}%',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF38BDF8),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _getSeverityColor(
+                                    _aiSuggestion!['severity'] ?? 'Medium',
+                                  ).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Suggested Priority: ${_aiSuggestion!['severity'] ?? 'Medium'}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: _getSeverityColor(
+                                      _aiSuggestion!['severity'] ?? 'Medium',
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _aiSuggestion!['reasoning'] ?? '',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withValues(alpha: 0.8),
+                            ),
+                          ),
+                          if (_aiSuggestion!['visual_markers'] is List &&
+                              (_aiSuggestion!['visual_markers'] as List).isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: (_aiSuggestion!['visual_markers'] as List)
+                                  .map(
+                                    (marker) => Chip(
+                                      label: Text(
+                                        marker.toString(),
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ],
+                          const SizedBox(height: 6),
+                          Text(
+                            'ℹ️ AI suggestions are advisory. You can modify the category and severity below before submitting.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.white.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ] else
+                          Text(
+                            'Tap "Analyze Photo" to receive AI category, priority, and visual marker recommendations, or fill out the form manually below.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.6),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Skip AI Switch (Manual Mode)
+              SwitchListTile(
+                value: _skipAi,
+                onChanged: (val) {
+                  setState(() {
+                    _skipAi = val;
+                  });
+                },
+                title: const Text(
+                  'Submit without AI analysis',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Manual submission bypasses automated AI categorization',
+                  style: TextStyle(fontSize: 12),
+                ),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+              const SizedBox(height: 12),
+
+              // Category Selector
+              Text(
+                'Incident Category',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _selectedCategory,
+                items: _categories.map((cat) {
+                  return DropdownMenuItem(
+                    value: cat,
+                    child: Text(cat),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedCategory = val;
+                    });
+                  }
+                },
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.category_outlined),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Severity Selector
+              Text(
+                'Severity Priority',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: _severities.map((sev) {
+                  final isSelected = _selectedSeverity == sev;
+                  final color = _getSeverityColor(sev);
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: ChoiceChip(
+                        label: Text(
+                          sev,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight:
+                                isSelected ? FontWeight.w700 : FontWeight.w500,
+                            color: isSelected ? Colors.white : Colors.white70,
+                          ),
+                        ),
+                        selected: isSelected,
+                        selectedColor: color,
+                        backgroundColor: theme.colorScheme.surface,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() {
+                              _selectedSeverity = sev;
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
 
               // Location card
               Card(
@@ -487,11 +837,11 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
                 maxLength: 1000,
                 decoration: const InputDecoration(
                   labelText: 'Description (Optional)',
-                  hintText: 'Describe the incident details, severity, and any relevant information...',
+                  hintText: 'Describe observations, landmarks, water color, flow rate...',
                   alignLabelWithHint: true,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // Submit button
               if (_isSubmitting)
@@ -500,14 +850,14 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
                     const CircularProgressIndicator(),
                     const SizedBox(height: 12),
                     Text(
-                      '🤖 Analyzing with AI...',
+                      _skipAi ? 'Submitting report...' : '🤖 Processing report...',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.secondary,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Verifying and categorizing incident',
+                      'Recording location & details',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: Colors.white.withValues(alpha: 0.5),
                       ),
@@ -548,8 +898,14 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Category: ${_submissionResult!['category'] ?? 'Analyzing...'}',
+                          'Category: ${_submissionResult!['category'] ?? _selectedCategory}',
                           style: theme.textTheme.bodyMedium,
+                        ),
+                        Text(
+                          'Severity: ${_submissionResult!['severity'] ?? _selectedSeverity}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
                         ),
                         if (_submissionResult!['status'] != null)
                           Text(
