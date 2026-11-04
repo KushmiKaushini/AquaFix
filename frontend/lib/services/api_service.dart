@@ -269,8 +269,7 @@ class ApiService {
       ).timeout(Duration(seconds: _config.requestTimeoutSeconds));
 
       final data = _handleResponse(response);
-      if (data is List) return data;
-      if (data['items'] is List) return data['items'];
+      if (data['items'] is List) return data['items'] as List<dynamic>;
       return [];
     } on ApiException {
       rethrow;

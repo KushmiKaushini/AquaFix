@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../providers/app_providers.dart';
 import '../../services/api_exceptions.dart';
+import '../../services/offline_queue_service.dart';
+import '../../models/queued_incident_model.dart';
 
 class ReportIncidentScreen extends ConsumerStatefulWidget {
   const ReportIncidentScreen({super.key});
@@ -237,12 +239,56 @@ class _ReportIncidentScreenState extends ConsumerState<ReportIncidentScreen> {
       setState(() {
         _isSubmitting = false;
       });
-      _showErrorSnackBar(e.userFriendlyMessage);
+      if (e.type == ApiErrorType.networkError || e.type == ApiErrorType.timeout) {
+        await _enqueueForOfflineSync();
+      } else {
+        _showErrorSnackBar(e.userFriendlyMessage);
+      }
     } catch (e) {
       setState(() {
         _isSubmitting = false;
       });
-      _showErrorSnackBar('Unexpected error: ${e.toString()}');
+      // Fallback for offline socket / network issues
+      await _enqueueForOfflineSync();
+    }
+  }
+
+  Future<void> _enqueueForOfflineSync() async {
+    try {
+      final queueService = ref.read(offlineQueueServiceProvider);
+      await queueService.enqueue(QueuedIncident(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        imagePath: _selectedImage!.path,
+        latitude: _currentPosition!.latitude,
+        longitude: _currentPosition!.longitude,
+        description: _descriptionController.text.trim(),
+        category: _selectedCategory,
+        severity: _selectedSeverity,
+        skipAi: _skipAi,
+        createdAt: DateTime.now(),
+      ));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.cloud_off, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Network offline. Report saved to offline queue and will sync automatically when connected!',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Color(0xFFF59E0B),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (err) {
+      _showErrorSnackBar('Network unavailable and offline queue error: ${err.toString()}');
     }
   }
 
