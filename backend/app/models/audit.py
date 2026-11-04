@@ -1,5 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, func
+from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.core.database import Base
 
@@ -13,3 +14,5 @@ class IncidentAuditTrail(Base):
     new_status = Column(String(50), nullable=False)
     internal_notes = Column(Text, nullable=True)
     changed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    modifier = relationship("User", foreign_keys=[modified_by], lazy="joined")

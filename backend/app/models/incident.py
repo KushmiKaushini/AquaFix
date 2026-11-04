@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, func
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, JSON, func
 from sqlalchemy.dialects.postgresql import UUID
 from geoalchemy2 import Geography
 from app.core.database import Base
@@ -11,8 +11,10 @@ class Incident(Base):
     reporter_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     status = Column(String(50), default="Pending", nullable=False)  # 'Pending', 'In Progress', 'Resolved', 'Rejected'
     category = Column(String(100), nullable=False)
+    severity = Column(String(20), default="Medium", nullable=False)  # 'Low', 'Medium', 'High', 'Critical'
     description = Column(Text, nullable=True)
     image_url = Column(String(512), nullable=True)
+    ai_analysis = Column(JSON, nullable=True)  # Store Gemini suggestion payload & metadata
     
     # PostGIS Spatial Geography coordinate: Point in SRID 4326 (WGS 84)
     location = Column(Geography(geometry_type="POINT", srid=4326), nullable=False)
