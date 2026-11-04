@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/ui_components.dart';
 import '../incidents/incidents_list_screen.dart';
+import '../../widgets/notifications_sheet.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -33,8 +34,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         title: const Text('Dashboard'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {},
+            icon: Badge(
+              isLabelVisible: incidents.any((i) => i.isInProgress || i.isResolved),
+              child: const Icon(Icons.notifications_outlined),
+            ),
+            tooltip: 'Notifications',
+            onPressed: () => NotificationsSheet.show(context),
           ),
           const SizedBox(width: 8),
         ],

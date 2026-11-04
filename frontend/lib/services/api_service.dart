@@ -316,6 +316,45 @@ class ApiService {
     }
   }
 
+  /// Register FCM push notification token with backend
+  Future<Map<String, dynamic>> registerDeviceToken(String fcmToken) async {
+    try {
+      final config = getAppConfig();
+      final uri = Uri.parse('${config.apiBaseUrl}/auth/device-token');
+      final authHeaders = await _authHeaders();
+      final response = await _httpClient.post(
+        uri,
+        headers: {..._headers, ...authHeaders},
+        body: json.encode({'fcm_token': fcmToken}),
+      ).timeout(Duration(seconds: _config.requestTimeoutSeconds));
+
+      return _handleResponse(response);
+    } catch (e) {
+      throw ApiException(
+        ApiErrorType.networkError,
+        'Failed to register device token: ${e.toString()}',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Check backend server health status
+  Future<Map<String, dynamic>> checkHealth() async {
+    try {
+      final config = getAppConfig();
+      final rootUrl = config.apiBaseUrl.replaceAll('/api/v1', '');
+      final uri = Uri.parse('$rootUrl/health');
+      final response = await _httpClient.get(uri).timeout(const Duration(seconds: 5));
+      return json.decode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      throw ApiException(
+        ApiErrorType.networkError,
+        'Server unreachable: ${e.toString()}',
+        originalError: e,
+      );
+    }
+  }
+
   void _validateCoordinates(double latitude, double longitude) {
     if (latitude < -90 || latitude > 90) {
       throw ApiException(
