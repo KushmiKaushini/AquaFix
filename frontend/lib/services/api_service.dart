@@ -316,6 +316,45 @@ class ApiService {
     }
   }
 
+  /// Register FCM push notification token with backend
+  Future<Map<String, dynamic>> registerDeviceToken(String fcmToken) async {
+    try {
+      final config = getAppConfig();
+      final uri = Uri.parse('${config.apiBaseUrl}/auth/device-token');
+      final authHeaders = await _authHeaders();
+      final response = await _httpClient.post(
+        uri,
+        headers: {..._headers, ...authHeaders},
+        body: json.encode({'fcm_token': fcmToken}),
+      ).timeout(Duration(seconds: _config.requestTimeoutSeconds));
+
+      return _handleResponse(response);
+    } catch (e) {
+      throw ApiException(
+        ApiErrorType.networkError,
+        'Failed to register device token: ${e.toString()}',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Check backend server health status
+  Future<Map<String, dynamic>> checkHealth() async {
+    try {
+      final config = getAppConfig();
+      final rootUrl = config.apiBaseUrl.replaceAll('/api/v1', '');
+      final uri = Uri.parse('$rootUrl/health');
+      final response = await _httpClient.get(uri).timeout(const Duration(seconds: 5));
+      return json.decode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      throw ApiException(
+        ApiErrorType.networkError,
+        'Server unreachable: ${e.toString()}',
+        originalError: e,
+      );
+    }
+  }
+
   void _validateCoordinates(double latitude, double longitude) {
     if (latitude < -90 || latitude > 90) {
       throw ApiException(
@@ -341,13 +380,32 @@ class ApiService {
   }
 
   Map<String, dynamic> _handleResponse(http.Response response) {
-    final body = json.decode(response.body);
+    dynamic body;
+    try {
+      body = json.decode(response.body);
+    } catch (_) {
+      // Server returned non-JSON (e.g. raw 500 error, proxy error, or HTML page)
+      if (response.statusCode >= 500) {
+        throw ApiException(
+          ApiErrorType.serverError,
+          'Server error (${response.statusCode}): Backend service or database is unavailable. Please check server logs.',
+          statusCode: response.statusCode,
+        );
+      }
+      throw ApiException(
+        ApiErrorType.unknown,
+        'Invalid server response (${response.statusCode}): ${response.body.isNotEmpty ? response.body : "Empty response"}',
+        statusCode: response.statusCode,
+      );
+    }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return body is Map<String, dynamic> ? body : {'items': body};
     }
 
-    final detail = body['detail'] ?? 'Unknown error';
+    final detail = (body is Map && body.containsKey('detail'))
+        ? body['detail'].toString()
+        : 'Request failed with status ${response.statusCode}';
 
     switch (response.statusCode) {
       case 400:
@@ -365,7 +423,7 @@ class ApiService {
       case 429:
         throw ApiException(ApiErrorType.networkError, 'Rate limit exceeded. Try again later.', statusCode: 429);
       case 503:
-        throw ApiException(ApiErrorType.serverError, 'Service unavailable', statusCode: 503);
+        throw ApiException(ApiErrorType.serverError, 'Service unavailable: $detail', statusCode: 503);
       default:
         throw ApiException(ApiErrorType.serverError, detail, statusCode: response.statusCode);
     }

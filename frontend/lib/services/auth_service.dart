@@ -26,6 +26,25 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
+  String _parseErrorMessage(http.Response response, String fallback) {
+    try {
+      final error = json.decode(response.body);
+      if (error is Map && error.containsKey('detail')) {
+        return error['detail'].toString();
+      }
+    } catch (_) {
+      // Body is not JSON (e.g. plain text 500 error from backend)
+    }
+
+    if (response.statusCode >= 500) {
+      return 'Server error (${response.statusCode}): Backend database or server is unavailable. Please verify PostgreSQL is running and check server logs.';
+    }
+    if (response.body.isNotEmpty && response.body.length < 200) {
+      return response.body;
+    }
+    return fallback;
+  }
+
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
@@ -40,13 +59,15 @@ class AuthService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final token = data['access_token'];
-        await _storage.write(key: 'auth_token', value: token);
-        return data;
+        if (token != null) {
+          await _storage.write(key: 'auth_token', value: token.toString());
+        }
+        return data as Map<String, dynamic>;
       } else {
-        final error = json.decode(response.body);
+        final errorMsg = _parseErrorMessage(response, 'Invalid email or password');
         throw ApiException(
-          ApiErrorType.unauthorized,
-          error['detail'] ?? 'Login failed',
+          response.statusCode == 401 ? ApiErrorType.unauthorized : ApiErrorType.serverError,
+          errorMsg,
           statusCode: response.statusCode,
         );
       }
@@ -80,12 +101,12 @@ class AuthService {
       ).timeout(Duration(seconds: _config.requestTimeoutSeconds));
 
       if (response.statusCode == 201) {
-        return json.decode(response.body);
+        return json.decode(response.body) as Map<String, dynamic>;
       } else {
-        final error = json.decode(response.body);
+        final errorMsg = _parseErrorMessage(response, 'Registration failed');
         throw ApiException(
-          ApiErrorType.validationError,
-          error['detail'] ?? 'Registration failed',
+          response.statusCode == 400 ? ApiErrorType.validationError : ApiErrorType.serverError,
+          errorMsg,
           statusCode: response.statusCode,
         );
       }
@@ -118,7 +139,7 @@ class AuthService {
       ).timeout(Duration(seconds: _config.requestTimeoutSeconds));
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return json.decode(response.body) as Map<String, dynamic>;
       }
       return null;
     } catch (e) {
