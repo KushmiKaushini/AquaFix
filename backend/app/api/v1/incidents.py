@@ -4,7 +4,7 @@ import shutil
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import func, cast
+from sqlalchemy import func, cast, or_
 from typing import List, Optional
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -25,6 +25,7 @@ from app.schemas.incident import (
     VALID_CATEGORIES,
 )
 from app.services.gemini import gemini_service
+from app.services.storage import storage_service
 
 logger = logging.getLogger("aquafix.incidents")
 
@@ -204,16 +205,9 @@ async def report_incident(
     if chosen_severity not in VALID_SEVERITIES:
         chosen_severity = "Medium"
 
-    # 5. Save file locally
+    # 5. Save file via storage abstraction layer (local or cloud S3/GCS)
     file_extension = os.path.splitext(file.filename or "")[1].lower() if file.filename else ".jpg"
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
-    filepath = os.path.join(UPLOAD_DIR, unique_filename)
-
-    await file.seek(0)
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    image_url = f"/uploads/{unique_filename}"
+    image_url = await storage_service.save_file(file, file_extension)
     wkt_location = f"SRID=4326;POINT({longitude} {latitude})"
 
     # 6. Create SQL model
@@ -258,6 +252,7 @@ async def report_incident(
 
 @router.get("/", response_model=dict)
 def read_incidents(
+    q: Optional[str] = None,
     status_filter: Optional[str] = None,
     severity_filter: Optional[str] = None,
     lat: Optional[float] = None,
@@ -270,6 +265,7 @@ def read_incidents(
     """
     Get incidents with pagination and optional filters.
     Query Parameters:
+    - q: Full-text search keyword matching description or category
     - skip: Number of records to skip (default: 0)
     - limit: Maximum records to return (default: 20, max: 100)
     - status_filter: Filter by status (Pending, In Progress, Resolved, Rejected)
@@ -280,6 +276,15 @@ def read_incidents(
     limit = max(1, min(100, limit))
 
     query = db.query(Incident)
+
+    if q and q.strip():
+        search_term = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                Incident.description.ilike(search_term),
+                Incident.category.ilike(search_term)
+            )
+        )
 
     if status_filter:
         if status_filter not in VALID_STATUSES:

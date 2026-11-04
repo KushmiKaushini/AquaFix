@@ -177,6 +177,26 @@ def test_list_incidents_status_and_severity_filters(client, db_session):
     assert all(item["severity"] == "Critical" for item in data["items"])
 
 
+def test_list_incidents_text_search(client, db_session):
+    """Test full-text search filtering on incident description and category."""
+    special_inc = Incident(
+        id=uuid.uuid4(),
+        status="Pending",
+        category="Road Sinkhole",
+        severity="High",
+        description="Huge crater near Central Boulevard junction",
+        location="SRID=4326;POINT(79.8612 6.9271)"
+    )
+    db_session.add(special_inc)
+    db_session.commit()
+
+    response = client.get("/api/v1/incidents/?q=Central+Boulevard")
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["total"] >= 1
+    assert any("Central Boulevard" in (item["description"] or "") for item in data["items"])
+
+
 def test_list_incidents_invalid_status_filter(client):
     """Test filtering by nonexistent status returns 400 Bad Request."""
     response = client.get("/api/v1/incidents/?status_filter=NonExistentStatus")

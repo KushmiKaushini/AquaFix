@@ -38,6 +38,19 @@ except Exception as e:
     print(f"⚠️ Automatic database table initialization skipped: {str(e)}")
     print("Ensure PostgreSQL is running and PostGIS extension is loaded.")
 
+# Initialize Sentry error monitoring if configured
+if settings.SENTRY_DSN:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.ENVIRONMENT,
+            traces_sample_rate=0.2 if settings.ENVIRONMENT == "production" else 1.0,
+        )
+        print("✅ Sentry error tracking initialized")
+    except Exception as e:
+        print(f"⚠️ Sentry initialization skipped: {str(e)}")
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="AquaFix Crowdsourced Public Sanitation & Infrastructure Reporting Platform Backend API Gateway",

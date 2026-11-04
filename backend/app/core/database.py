@@ -2,12 +2,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.config import settings
 
-# Create engine with support for standard connections
-engine = create_engine(
-    settings.DATABASE_URL,
-    # pool_pre_ping checks connections to ensure they are alive
-    pool_pre_ping=True
-)
+engine_kwargs = {"pool_pre_ping": True}
+if not settings.DATABASE_URL.startswith("sqlite"):
+    engine_kwargs.update({
+        "pool_size": settings.DB_POOL_SIZE,
+        "max_overflow": settings.DB_MAX_OVERFLOW,
+        "pool_timeout": settings.DB_POOL_TIMEOUT,
+        "pool_recycle": settings.DB_POOL_RECYCLE,
+    })
+
+# Create engine with support for standard connections and connection pooling
+engine = create_engine(settings.DATABASE_URL, **engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
