@@ -26,6 +26,7 @@ from app.schemas.incident import (
 )
 from app.services.gemini import gemini_service
 from app.services.storage import storage_service
+from app.services.notification import get_notification_service
 
 logger = logging.getLogger("aquafix.incidents")
 
@@ -550,6 +551,23 @@ def update_incident_status(
     db.add(db_audit)
     db.commit()
     db.refresh(db_incident)
+
+    # Dispatch real-time push notification if reporter has registered device token
+    if db_incident.reporter_id:
+        reporter = db.query(User).filter(User.id == db_incident.reporter_id).first()
+        if reporter and reporter.fcm_token:
+            notification_svc = get_notification_service()
+            notification_svc.send_push_notification(
+                token=reporter.fcm_token,
+                title="Incident Status Update",
+                body=f"Your report '{db_incident.category}' status was updated to {payload.status}.",
+                data={
+                    "incident_id": str(db_incident.id),
+                    "old_status": old_status,
+                    "new_status": payload.status,
+                    "category": db_incident.category or "",
+                }
+            )
 
     return IncidentResponse(
         id=db_incident.id,

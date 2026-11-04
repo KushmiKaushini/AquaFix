@@ -170,3 +170,19 @@ def test_refresh_token_unauthorized(client):
     """Test POST /api/v1/auth/refresh fails without valid authorization."""
     response = client.post("/api/v1/auth/refresh")
     assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+
+
+def test_update_device_token(client, citizen_headers):
+    """Test POST /api/v1/auth/device-token stores device FCM token for notifications."""
+    response = client.post(
+        "/api/v1/auth/device-token",
+        headers=citizen_headers,
+        json={"fcm_token": "mock-fcm-device-token-12345"}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["fcm_token"] == "mock-fcm-device-token-12345"
+
+    # Verify user profile now includes fcm_token
+    profile_resp = client.get("/api/v1/auth/me", headers=citizen_headers)
+    assert profile_resp.status_code == status.HTTP_200_OK
+    assert profile_resp.json()["fcm_token"] == "mock-fcm-device-token-12345"

@@ -6,7 +6,7 @@ from slowapi.util import get_remote_address
 from app.core.database import get_db
 from app.core.auth import hash_password, verify_password, create_access_token, verify_token
 from app.models.user import User
-from app.schemas.user import UserCreate, UserLogin, UserResponse, TokenResponse
+from app.schemas.user import UserCreate, UserLogin, UserResponse, TokenResponse, DeviceTokenUpdate
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 limiter = Limiter(key_func=get_remote_address)
@@ -138,3 +138,16 @@ def refresh_token(
 
     new_access_token = create_access_token(data={"sub": str(user.id), "email": user.email, "role": user.role})
     return TokenResponse(access_token=new_access_token)
+
+
+@router.post("/device-token", status_code=status.HTTP_200_OK)
+def update_device_token(
+    payload: DeviceTokenUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Register or update the FCM device push token for the authenticated user."""
+    current_user.fcm_token = payload.fcm_token.strip()
+    db.commit()
+    db.refresh(current_user)
+    return {"message": "Device token updated successfully", "fcm_token": current_user.fcm_token}

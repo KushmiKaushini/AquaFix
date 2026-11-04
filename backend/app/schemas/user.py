@@ -15,10 +15,14 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class DeviceTokenUpdate(BaseModel):
+    fcm_token: str
+
 class UserResponse(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    fcm_token: Optional[str] = None
     created_at: datetime
 
 class TokenResponse(BaseModel):

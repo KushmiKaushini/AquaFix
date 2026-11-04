@@ -11,4 +11,5 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(50), default="citizen", nullable=False)  # 'citizen' or 'official'
     full_name = Column(String(100), nullable=False)
+    fcm_token = Column(String(512), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Frontend CORS
     FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend URL for CORS")
     
+    # Push Notifications
+    FIREBASE_CREDENTIALS_PATH: str = Field(default="", description="Path to Firebase Admin service account JSON (optional)")
+
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, ge=1, description="Rate limit per minute per IP")
     

@@ -289,6 +289,46 @@ def test_update_status_official_success(client, official_headers, db_session):
     assert "Emergency repair crew dispatched" in audit.internal_notes
 
 
+def test_update_status_dispatches_push_notification(client, official_headers, citizen_user, db_session):
+    """Test updating status sends push notification when reporter has fcm_token."""
+    from app.services.notification import get_notification_service, MockNotificationService
+
+    citizen_user.fcm_token = "device-token-reporter-999"
+    db_session.commit()
+
+    inc_id = uuid.uuid4()
+    inc = Incident(
+        id=inc_id,
+        status="Pending",
+        category="Contaminated Water",
+        severity="High",
+        reporter_id=citizen_user.id,
+        location="SRID=4326;POINT(79.8612 6.9271)"
+    )
+    db_session.add(inc)
+    db_session.commit()
+
+    response = client.patch(
+        f"/api/v1/incidents/{inc_id}/status",
+        headers=official_headers,
+        json={
+            "status": "Resolved",
+            "internal_notes": "Main valve flushed and sanitized."
+        }
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["status"] == "Resolved"
+
+    # Verify notification service received the push event
+    svc = get_notification_service()
+    if isinstance(svc, MockNotificationService):
+        assert len(svc.sent_notifications) > 0
+        latest = svc.sent_notifications[-1]
+        assert latest["token"] == "device-token-reporter-999"
+        assert "Resolved" in latest["body"]
+        assert latest["data"]["incident_id"] == str(inc_id)
+
+
 def test_update_status_citizen_forbidden(client, citizen_headers, db_session):
     """Test non-official (citizen) user cannot update status (403 Forbidden)."""
     inc_id = uuid.uuid4()
