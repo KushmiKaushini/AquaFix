@@ -1,0 +1,64 @@
+name: AquaFix CI
+
+on:
+  push:
+    branches: [ main, develop, feature/** ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-tests:
+    name: Backend Test Suite (FastAPI & PostGIS)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install System Spatial Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgeos-dev libpq-dev gdal-bin
+
+      - name: Install Python Dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov httpx
+
+      - name: Run Backend Tests
+        run: |
+          cd backend
+          python -m pytest tests -v
+
+  frontend-tests:
+    name: Frontend Test Suite (Flutter)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.x"
+          channel: "stable"
+          cache: true
+
+      - name: Install Flutter Dependencies
+        run: |
+          cd frontend
+          flutter pub get
+
+      - name: Run Flutter Unit Tests
+        run: |
+          cd frontend
+          flutter test

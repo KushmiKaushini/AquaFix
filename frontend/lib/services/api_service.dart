@@ -34,12 +34,76 @@ class ApiService {
     return {};
   }
 
-  /// Submit incident report with image upload
+  /// Analyze incident image with AI to obtain advisory suggestions
+  Future<Map<String, dynamic>> analyzeImage(String imagePath) async {
+    try {
+      final file = File(imagePath);
+      if (!await file.exists()) {
+        throw ApiException(
+          ApiErrorType.validationError,
+          'Image file not found',
+        );
+      }
+
+      final fileSize = await file.length();
+      if (fileSize > 5 * 1024 * 1024) {
+        throw ApiException(
+          ApiErrorType.validationError,
+          'File too large. Maximum 5MB.',
+        );
+      }
+
+      final fileExtension = file.path.split('.').last.toLowerCase();
+      if (!['jpg', 'jpeg', 'png', 'webp'].contains(fileExtension)) {
+        throw ApiException(
+          ApiErrorType.validationError,
+          'Invalid file format. Supported: JPEG, PNG, WebP',
+        );
+      }
+
+      final uri = Uri.parse('$baseUrl/incidents/analyze-image');
+      final request = http.MultipartRequest('POST', uri);
+
+      final mimeSubtype = fileExtension == 'png' ? 'png' : 'jpeg';
+      final multipartFile = await http.MultipartFile.fromPath(
+        'file',
+        file.path,
+        contentType: MediaType('image', mimeSubtype),
+      );
+      request.files.add(multipartFile);
+
+      final streamedResponse = await _httpClient.send(request).timeout(
+        Duration(seconds: _config.requestTimeoutSeconds),
+        onTimeout: () {
+          throw ApiException(
+            ApiErrorType.timeout,
+            'AI analysis timed out after ${_config.requestTimeoutSeconds} seconds',
+          );
+        },
+      );
+
+      final response = await http.Response.fromStream(streamedResponse);
+      return _handleResponse(response);
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      throw ApiException(
+        ApiErrorType.unknown,
+        'AI analysis error: ${e.toString()}',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Submit incident report with image upload, location, and optional AI bypass
   Future<Map<String, dynamic>> submitIncident({
     required String imagePath,
     required double latitude,
     required double longitude,
     required String description,
+    String? category,
+    String? severity,
+    bool skipAi = false,
   }) async {
     try {
       _validateCoordinates(latitude, longitude);
@@ -80,6 +144,15 @@ class ApiService {
       request.fields['latitude'] = latitude.toString();
       request.fields['longitude'] = longitude.toString();
       request.fields['description'] = description.trim();
+      if (category != null && category.isNotEmpty) {
+        request.fields['category'] = category;
+      }
+      if (severity != null && severity.isNotEmpty) {
+        request.fields['severity'] = severity;
+      }
+      if (skipAi) {
+        request.fields['skip_ai'] = 'true';
+      }
 
       // Add image file
       final mimeSubtype = fileExtension == 'png' ? 'png' : 'jpeg';
@@ -113,11 +186,12 @@ class ApiService {
     }
   }
 
-  /// Fetch incidents list with pagination
+  /// Fetch incidents list with pagination and filters
   Future<Map<String, dynamic>> getIncidents({
     int skip = 0,
     int limit = 20,
     String? statusFilter,
+    String? severityFilter,
     double? lat,
     double? lon,
     double? radius,
@@ -130,6 +204,9 @@ class ApiService {
 
       if (statusFilter != null) {
         queryParams['status_filter'] = statusFilter;
+      }
+      if (severityFilter != null) {
+        queryParams['severity_filter'] = severityFilter;
       }
       if (lat != null && lon != null && radius != null) {
         queryParams['lat'] = lat.toString();
@@ -181,22 +258,50 @@ class ApiService {
     }
   }
 
-  /// Update incident status (official/admin only)
+  /// Fetch incident resolution history / audit trail
+  Future<List<dynamic>> getIncidentHistory(String incidentId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/incidents/$incidentId/history');
+      final authHeaders = await _authHeaders();
+      final response = await _httpClient.get(
+        uri,
+        headers: {..._headers, ...authHeaders},
+      ).timeout(Duration(seconds: _config.requestTimeoutSeconds));
+
+      final data = _handleResponse(response);
+      if (data['items'] is List) return data['items'] as List<dynamic>;
+      return [];
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      throw ApiException(
+        ApiErrorType.networkError,
+        'Failed to fetch incident history: ${e.toString()}',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Update incident status and optional severity (official/admin only)
   Future<Map<String, dynamic>> updateIncidentStatus({
     required String incidentId,
     required String status,
+    String? severity,
     String? internalNotes,
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/incidents/$incidentId/status');
       final authHeaders = await _authHeaders();
+      final bodyMap = <String, dynamic>{
+        'status': status,
+        if (internalNotes != null) 'internal_notes': internalNotes,
+        if (severity != null) 'severity': severity,
+      };
+
       final response = await _httpClient.patch(
         uri,
         headers: {..._headers, ...authHeaders},
-        body: json.encode({
-          'status': status,
-          'internal_notes': internalNotes,
-        }),
+        body: json.encode(bodyMap),
       ).timeout(Duration(seconds: _config.requestTimeoutSeconds));
 
       return _handleResponse(response);
@@ -239,7 +344,7 @@ class ApiService {
     final body = json.decode(response.body);
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return body is Map<String, dynamic> ? body : {'data': body};
+      return body is Map<String, dynamic> ? body : {'items': body};
     }
 
     final detail = body['detail'] ?? 'Unknown error';

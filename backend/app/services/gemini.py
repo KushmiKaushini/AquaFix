@@ -1,10 +1,21 @@
 import json
 import logging
 import google.generativeai as genai
+from typing import Dict, Any
 from app.core.config import settings
 
 logger = logging.getLogger("aquafix.gemini")
 logging.basicConfig(level=logging.INFO)
+
+VALID_CATEGORIES = {
+    "Pipeline Leak",
+    "Drainage Blockage",
+    "Overflowing Sewage",
+    "Road Sinkhole",
+    "Public Sanitation Issue"
+}
+
+VALID_SEVERITIES = {"Low", "Medium", "High", "Critical"}
 
 class GeminiVisionService:
     def __init__(self):
@@ -17,65 +28,78 @@ class GeminiVisionService:
                 "Set GEMINI_API_KEY in backend/.env to activate live Gemini 1.5 Flash parsing."
             )
         else:
-            # Initialize generative AI client
             genai.configure(api_key=self.api_key)
-            # Use gemini-1.5-flash for rapid multimodal ingestion
             self.model = genai.GenerativeModel("gemini-1.5-flash")
 
-    async def verify_and_categorize_incident(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
+    async def verify_and_categorize_incident(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> Dict[str, Any]:
         """
-        Sends image binary payload to Gemini 1.5 Flash for visual verification (spam filtering)
-        and auto-categorization. Returns a structured metadata dictionary.
+        Sends image binary payload to Gemini 1.5 Flash for visual verification (spam filtering),
+        auto-categorization, severity estimation, and feature breakdown.
+        
+        Returns an advisory metadata dictionary:
+        {
+            "is_infrastructure_issue": bool,
+            "category": str,
+            "severity": str,
+            "confidence": float,
+            "reasoning": str,
+            "visual_markers": [str]
+        }
         """
         if self.use_mock:
-            # Perform elegant mock prediction based on the assumption that a tester is uploading
-            # a valid image, returning structured simulated data.
             logger.info("🤖 [MOCK ENGINE] Simulating visual verification on incident image.")
             return {
                 "is_infrastructure_issue": True,
                 "category": "Pipeline Leak",
-                "confidence": 0.98,
-                "reasoning": "Mock verification succeeded. Image shows running water from a fractured pavement seam."
+                "severity": "High",
+                "confidence": 0.96,
+                "reasoning": "Mock verification: Image shows pressurized clean water erupting from fractured pavement seam.",
+                "visual_markers": ["water eruption", "fractured road pavement", "puddle accumulation"]
             }
 
-        # Prompt specifying exact output format
         prompt = (
             "You are an expert municipal infrastructure auditor and public safety inspector.\n"
-            "Analyze the uploaded image and perform two tasks:\n"
-            "1. SPAM FILTERING: Verify if the image genuinely depicts a public utility, infrastructure, "
+            "Analyze the uploaded image and perform four advisory tasks:\n"
+            "1. SPAM FILTERING: Verify if the image depicts a public utility, municipal infrastructure, "
             "or public sanitation/water issue (e.g., broken water pipelines, overflowing drainage, sewage, "
             "flooded roads, sinkholes, public toilet issues).\n"
-            "2. AUTO-CATEGORIZATION: If it is a valid issue, categorize it into one of these strict categories:\n"
+            "2. AUTO-CATEGORIZATION: Categorize into one of these strict categories:\n"
             "   - 'Pipeline Leak'\n"
             "   - 'Drainage Blockage'\n"
             "   - 'Overflowing Sewage'\n"
             "   - 'Road Sinkhole'\n"
-            "   - 'Public Sanitation Issue'\n\n"
-            "You MUST respond ONLY with a valid JSON block of the following shape, with NO extra text or markdown formatting:\n"
+            "   - 'Public Sanitation Issue'\n"
+            "3. SEVERITY ESTIMATION: Suggest severity level from:\n"
+            "   - 'Critical' (immediate danger to public health/safety, severe road collapse, major water main burst)\n"
+            "   - 'High' (significant sewage overflow, active flooding, moderate sinkhole)\n"
+            "   - 'Medium' (clogged storm drain, persistent pipe drip, non-emergency sanitation)\n"
+            "   - 'Low' (minor cosmetic water issue, stagnant puddle, small litter/blockage)\n"
+            "4. VISUAL MARKERS: List 2 to 4 key visual features observed in the photo.\n\n"
+            "You MUST respond ONLY with a valid JSON block of this shape with NO markdown fences:\n"
             "{\n"
             "  \"is_infrastructure_issue\": true,\n"
             "  \"category\": \"Pipeline Leak\",\n"
+            "  \"severity\": \"High\",\n"
             "  \"confidence\": 0.95,\n"
-            "  \"reasoning\": \"Explain briefly what visual markers verify this identification.\"\n"
+            "  \"reasoning\": \"Brief explanation of what visual markers verify this identification.\",\n"
+            "  \"visual_markers\": [\"pressurized water flow\", \"cracked tarmac\", \"curbside ponding\"]\n"
             "}\n"
-            "If the image is not a valid infrastructure issue (e.g., a selfie, random scenery, food, or spam), "
+            "If the image is not a valid infrastructure issue (e.g. selfie, food, indoor furniture, random spam), "
             "set \"is_infrastructure_issue\" to false and specify the reasoning."
         )
 
         try:
-            # Prepare image part
             image_part = {
                 "mime_type": mime_type,
                 "data": image_bytes
             }
 
-            # Generate content from model with timeout and config
             response = self.model.generate_content(
                 [prompt, image_part],
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.2,
                     top_p=0.95,
-                    max_output_tokens=500
+                    max_output_tokens=600
                 )
             )
             
@@ -91,50 +115,40 @@ class GeminiVisionService:
             elif text_response.startswith("```"):
                 text_response = text_response.split("```")[1].split("```")[0].strip()
 
-            # Parse and validate response structure
             result = json.loads(text_response)
             
-            # Validate required fields exist
-            required_fields = {"is_infrastructure_issue", "category", "confidence", "reasoning"}
-            missing_fields = required_fields - set(result.keys())
-            if missing_fields:
-                logger.error(f"Gemini response missing required fields: {missing_fields}")
-                raise ValueError(f"Invalid response structure: missing {missing_fields}")
-            
-            # Validate field types
-            if not isinstance(result["is_infrastructure_issue"], bool):
-                logger.error(f"Invalid is_infrastructure_issue type: {type(result['is_infrastructure_issue'])}")
-                raise ValueError("is_infrastructure_issue must be boolean")
-            
-            if not isinstance(result["confidence"], (int, float)) or not (0 <= result["confidence"] <= 1):
-                logger.error(f"Invalid confidence value: {result['confidence']}")
-                raise ValueError("confidence must be a number between 0 and 1")
-            
-            # Validate category if it's an infrastructure issue
-            if result["is_infrastructure_issue"]:
-                valid_categories = {
-                    "Pipeline Leak", "Drainage Blockage", "Overflowing Sewage",
-                    "Road Sinkhole", "Public Sanitation Issue"
-                }
-                if result["category"] not in valid_categories:
-                    logger.warning(f"Gemini returned unexpected category: {result['category']}, defaulting to 'Public Sanitation Issue'")
-                    result["category"] = "Public Sanitation Issue"
-            
-            logger.info(f"✅ Gemini Analysis Success: is_infrastructure={result['is_infrastructure_issue']}, category={result['category']}, confidence={result['confidence']}")
-            return result
+            # Ensure required fields
+            is_infra = bool(result.get("is_infrastructure_issue", False))
+            category = result.get("category", "Public Sanitation Issue")
+            if category not in VALID_CATEGORIES:
+                category = "Public Sanitation Issue"
+                
+            severity = result.get("severity", "Medium")
+            if severity not in VALID_SEVERITIES:
+                severity = "Medium"
+
+            confidence = float(result.get("confidence", 0.8))
+            confidence = max(0.0, min(1.0, confidence))
+
+            reasoning = str(result.get("reasoning", "AI image analysis completed."))
+            visual_markers = result.get("visual_markers", [])
+            if not isinstance(visual_markers, list):
+                visual_markers = [str(visual_markers)]
+
+            return {
+                "is_infrastructure_issue": is_infra,
+                "category": category,
+                "severity": severity,
+                "confidence": confidence,
+                "reasoning": reasoning,
+                "visual_markers": visual_markers
+            }
 
         except json.JSONDecodeError as je:
             logger.error(f"❌ Gemini response JSON parsing failed: {str(je)}")
-            logger.debug(f"Raw response: {text_response[:200] if text_response else 'None'}")
             raise ValueError(f"Gemini returned invalid JSON: {str(je)}")
-        
-        except ValueError as ve:
-            logger.error(f"❌ Gemini response validation failed: {str(ve)}")
-            raise
-        
         except Exception as e:
-            logger.error(f"❌ Gemini API critical failure: {type(e).__name__}: {str(e)}", exc_info=True)
+            logger.error(f"❌ Gemini API failure: {type(e).__name__}: {str(e)}", exc_info=True)
             raise
 
-# Instantiate singleton service instance
 gemini_service = GeminiVisionService()

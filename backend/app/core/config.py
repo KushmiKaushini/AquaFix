@@ -15,17 +15,29 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = Field(description="PostgreSQL database URL with PostGIS support")
+    DB_POOL_SIZE: int = Field(default=20, ge=1, description="Database connection pool size")
+    DB_MAX_OVERFLOW: int = Field(default=10, ge=0, description="Max overflow connections beyond pool size")
+    DB_POOL_TIMEOUT: int = Field(default=30, ge=1, description="Connection checkout timeout in seconds")
+    DB_POOL_RECYCLE: int = Field(default=1800, ge=60, description="Connection recycle interval in seconds")
     
     # AI Service
     GEMINI_API_KEY: str = Field(default="", description="Google Gemini API key for image analysis (optional for mock mode)")
     
+    # Storage Backend
+    STORAGE_BACKEND: str = Field(default="local", description="Storage backend: local, s3, or gcs")
+    S3_BUCKET_NAME: str = Field(default="", description="S3 bucket name for uploads when STORAGE_BACKEND=s3")
+    AWS_REGION: str = Field(default="us-east-1", description="AWS region for S3 uploads")
+    
     # Frontend CORS
     FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend URL for CORS")
     
+    # Push Notifications
+    FIREBASE_CREDENTIALS_PATH: str = Field(default="", description="Path to Firebase Admin service account JSON (optional)")
+
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, ge=1, description="Rate limit per minute per IP")
     
-    # Optional: Sentry for error tracking
+    # Sentry for error tracking
     SENTRY_DSN: str = Field(default="", description="Sentry DSN for error tracking (optional)")
 
     model_config = SettingsConfigDict(
@@ -70,7 +82,6 @@ class Settings(BaseSettings):
             raise ValueError("FRONTEND_URL must start with http:// or https://")
         return v
 
-# Instantiate settings with validation
 try:
     settings = Settings()
     print(f"Configuration loaded successfully (Environment: {settings.ENVIRONMENT})")

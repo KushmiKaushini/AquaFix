@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/app_providers.dart';
+import '../dashboard/dashboard_screen.dart';
 import '../incidents/incidents_list_screen.dart';
 import '../incidents/report_incident_screen.dart';
 import '../profile/profile_screen.dart';
@@ -15,20 +15,11 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
 
-  late final List<Widget> _screens;
-
-  @override
-  void initState() {
-    super.initState();
-    _screens = [
-      const IncidentsListScreen(),
-      const ReportIncidentScreen(),
-      const ProfileScreen(),
-    ];
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(incidentsProvider.notifier).fetchIncidents(refresh: true);
-    });
-  }
+  final List<Widget> _screens = const [
+    DashboardScreen(),
+    IncidentsListScreen(),
+    ProfileScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -41,22 +32,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        backgroundColor: theme.colorScheme.surface,
+        onDestinationSelected: (index) => setState(() => _currentIndex = index),
         destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
           NavigationDestination(
             icon: Icon(Icons.list_alt_outlined),
             selectedIcon: Icon(Icons.list_alt),
             label: 'Incidents',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.add_circle_outline),
-            selectedIcon: Icon(Icons.add_circle),
-            label: 'Report',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
@@ -64,6 +50,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             label: 'Profile',
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showReportSheet(context),
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 8,
+        icon: const Icon(Icons.add_a_photo_rounded),
+        label: const Text('Report', style: TextStyle(fontWeight: FontWeight.w700)),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  void _showReportSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const FractionallySizedBox(
+        heightFactor: 0.92,
+        child: ClipRRect(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          child: ReportIncidentScreen(),
+        ),
       ),
     );
   }

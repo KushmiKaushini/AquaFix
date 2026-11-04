@@ -1,22 +1,37 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import '../lib/models/incident_model.dart';
-import '../lib/models/user_model.dart';
-import '../lib/utils/validators.dart';
+import 'package:aquafix/models/incident_model.dart';
+import 'package:aquafix/models/user_model.dart';
+import 'package:aquafix/utils/validators.dart';
 
 void main() {
   group('IncidentModel', () {
-    test('fromJson parses correctly', () {
+    test('fromJson parses correctly with severity and aiAnalysis', () {
       final json = {
         'id': '123e4567-e89b-12d3-a456-426614174000',
         'status': 'Pending',
         'category': 'Pipeline Leak',
-        'description': 'Test leak',
+        'severity': 'Critical',
+        'description': 'Test leak with high pressure',
         'image_url': '/uploads/test.jpg',
         'latitude': 6.9271,
         'longitude': 79.8612,
         'created_at': '2026-06-28T10:00:00Z',
         'updated_at': '2026-06-28T10:00:00Z',
+        'ai_analysis': {
+          'confidence': 0.96,
+          'reasoning': 'Observed high pressure leak',
+          'visual_markers': ['water eruption', 'pipe crack']
+        },
+        'history': [
+          {
+            'id': '987e6543-e89b-12d3-a456-426614174000',
+            'incident_id': '123e4567-e89b-12d3-a456-426614174000',
+            'new_status': 'Pending',
+            'internal_notes': 'Initial citizen submission',
+            'changed_at': '2026-06-28T10:00:00Z'
+          }
+        ]
       };
 
       final incident = IncidentModel.fromJson(json);
@@ -24,8 +39,70 @@ void main() {
       expect(incident.id, '123e4567-e89b-12d3-a456-426614174000');
       expect(incident.status, IncidentStatus.pending);
       expect(incident.category, 'Pipeline Leak');
+      expect(incident.severity, 'Critical');
+      expect(incident.severityDisplayName, 'Critical');
+      expect(incident.severityColor, const Color(0xFFDC2626));
       expect(incident.latitude, 6.9271);
       expect(incident.longitude, 79.8612);
+      expect(incident.aiAnalysis, isNotNull);
+      expect(incident.aiAnalysis!['confidence'], 0.96);
+      expect(incident.history, isNotNull);
+      expect(incident.history!.length, 1);
+      expect(incident.history!.first.newStatus, 'Pending');
+    });
+
+    test('severity colors and display names map correctly', () {
+      final low = IncidentModel(
+        id: '1',
+        status: IncidentStatus.pending,
+        category: 'Test',
+        severity: 'Low',
+        latitude: 0,
+        longitude: 0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      expect(low.severityDisplayName, 'Low');
+      expect(low.severityColor, const Color(0xFF10B981));
+
+      final medium = IncidentModel(
+        id: '2',
+        status: IncidentStatus.pending,
+        category: 'Test',
+        severity: 'Medium',
+        latitude: 0,
+        longitude: 0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      expect(medium.severityDisplayName, 'Medium');
+      expect(medium.severityColor, const Color(0xFFF59E0B));
+
+      final high = IncidentModel(
+        id: '3',
+        status: IncidentStatus.pending,
+        category: 'Test',
+        severity: 'High',
+        latitude: 0,
+        longitude: 0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      expect(high.severityDisplayName, 'High');
+      expect(high.severityColor, const Color(0xFFEA580C));
+
+      final critical = IncidentModel(
+        id: '4',
+        status: IncidentStatus.pending,
+        category: 'Test',
+        severity: 'Critical',
+        latitude: 0,
+        longitude: 0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      expect(critical.severityDisplayName, 'Critical');
+      expect(critical.severityColor, const Color(0xFFDC2626));
     });
 
     test('status display names are correct', () {

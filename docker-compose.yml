@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: aquafix_db
+    environment:
+      POSTGRES_DB: aquafix
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aquafix"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aquafix_api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: development
+      PROJECT_NAME: "AquaFix API"
+      SECRET_KEY: "dev-secret-key-change-in-production-use-openssl-rand-hex-32"
+      DATABASE_URL: "postgresql://postgres:postgrespassword@db:5432/aquafix"
+      GEMINI_API_KEY: ""
+      FRONTEND_URL: "http://localhost:3000"
+      RATE_LIMIT_PER_MINUTE: 60
+      STORAGE_BACKEND: local
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+
+volumes:
+  postgres_data:
