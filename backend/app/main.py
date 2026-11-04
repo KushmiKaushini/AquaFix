@@ -1,11 +1,13 @@
 import os
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.v1.incidents import router as incident_router
@@ -50,6 +52,8 @@ if settings.SENTRY_DSN:
         print("✅ Sentry error tracking initialized")
     except Exception as e:
         print(f"⚠️ Sentry initialization skipped: {str(e)}")
+
+logger = logging.getLogger("aquafix.main")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

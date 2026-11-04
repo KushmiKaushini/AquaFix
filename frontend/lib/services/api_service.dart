@@ -341,13 +341,32 @@ class ApiService {
   }
 
   Map<String, dynamic> _handleResponse(http.Response response) {
-    final body = json.decode(response.body);
+    dynamic body;
+    try {
+      body = json.decode(response.body);
+    } catch (_) {
+      // Server returned non-JSON (e.g. raw 500 error, proxy error, or HTML page)
+      if (response.statusCode >= 500) {
+        throw ApiException(
+          ApiErrorType.serverError,
+          'Server error (${response.statusCode}): Backend service or database is unavailable. Please check server logs.',
+          statusCode: response.statusCode,
+        );
+      }
+      throw ApiException(
+        ApiErrorType.unknown,
+        'Invalid server response (${response.statusCode}): ${response.body.isNotEmpty ? response.body : "Empty response"}',
+        statusCode: response.statusCode,
+      );
+    }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return body is Map<String, dynamic> ? body : {'items': body};
     }
 
-    final detail = body['detail'] ?? 'Unknown error';
+    final detail = (body is Map && body.containsKey('detail'))
+        ? body['detail'].toString()
+        : 'Request failed with status ${response.statusCode}';
 
     switch (response.statusCode) {
       case 400:
@@ -365,7 +384,7 @@ class ApiService {
       case 429:
         throw ApiException(ApiErrorType.networkError, 'Rate limit exceeded. Try again later.', statusCode: 429);
       case 503:
-        throw ApiException(ApiErrorType.serverError, 'Service unavailable', statusCode: 503);
+        throw ApiException(ApiErrorType.serverError, 'Service unavailable: $detail', statusCode: 503);
       default:
         throw ApiException(ApiErrorType.serverError, detail, statusCode: response.statusCode);
     }
